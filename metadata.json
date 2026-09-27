@@ -1,0 +1,6 @@
+{
+  "name": "Alpha Terminal - Long/Short Macro Regime & Structural Alpha Terminal",
+  "description": "Institutional-grade US Equity Macro Regime, Market Health, Capital Flow Strategy and Single-Stock Structural Alpha Deep Dive Trading Terminal powered by Gemini 2.5 Pro and Model Context Protocol (MCP).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
