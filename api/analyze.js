@@ -90,21 +90,35 @@ export default async function handler(req, res) {
   const unavailable = [];
   const connectedClients = [];
   const mcpServersEnv = process.env.MCP_SERVERS || "";
-  const serverAddresses = mcpServersEnv
+  const rawAddresses = mcpServersEnv
     .split(",")
     .map((addr) => addr.trim())
     .filter(Boolean);
 
-  for (const address of serverAddresses) {
+  for (const rawAddress of rawAddresses) {
     let client = null;
     let timeoutTimer = null;
+
+    // Normalize address: If someone passes base domain e.g. "https://macro-trade-analysis.vercel.app/" or "http://localhost:3000",
+    // automatically append "/api/mcp" if no path is provided.
+    let address = rawAddress;
+    try {
+      const parsedUrl = new URL(rawAddress);
+      if (parsedUrl.pathname === "/" || parsedUrl.pathname === "") {
+        parsedUrl.pathname = "/api/mcp";
+        address = parsedUrl.toString();
+      }
+    } catch (_) {
+      // keep original if invalid URL
+    }
+
     const isTradingView = address.includes("tradingview.com");
 
     if (isTradingView && !tvMcpToken) {
       console.warn("[MCP Transport] TradingView MCP requested but no OAuth token is provided. Falling back to internal live market data engine.");
       unavailable.push({
         address,
-        reason: "Unauthenticated (no TradingView OAuth token provided). Using live data failover engine."
+        reason: "Requires OAuth 2.1 authentication. Connect account in header or use live data failover engine."
       });
       continue;
     }
@@ -128,14 +142,16 @@ export default async function handler(req, res) {
       connectedClients.push(client);
     } catch (err) {
       if (timeoutTimer) clearTimeout(timeoutTimer);
-      const is401 = err?.message?.includes("401") || String(err).includes("Unauthorized");
+      const is401 = err?.message?.includes("401") || String(err).includes("Unauthorized") || String(err).includes("requires OAuth");
       if (isTradingView && is401) {
         console.warn("[MCP Transport] TradingView returned 401 Unauthorized (expired token). Clearing cookie.");
         res.setHeader("Set-Cookie", "tv_mcp_token=; Path=/; Max-Age=0; HttpOnly");
       }
       unavailable.push({
         address,
-        reason: err?.message || String(err)
+        reason: isTradingView && is401
+          ? "OAuth token invalid or expired. Re-authenticate in header."
+          : err?.message || String(err)
       });
       if (client) {
         try {
